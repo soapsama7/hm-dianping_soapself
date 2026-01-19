@@ -24,3 +24,7 @@ mybatis-plus:
 logging:
   level:
     com.hmdp: debug
+
+shop:
+  cache:
+    strategy: mutexStrategy
