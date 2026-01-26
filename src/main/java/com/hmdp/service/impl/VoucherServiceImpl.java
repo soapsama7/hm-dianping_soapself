@@ -41,11 +41,11 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
         // 保存优惠券
         save(voucher);
         // 保存秒杀信息
-        SeckillVoucher seckillVoucher = new SeckillVoucher();
-        seckillVoucher.setVoucherId(voucher.getId());
-        seckillVoucher.setStock(voucher.getStock());
-        seckillVoucher.setBeginTime(voucher.getBeginTime());
-        seckillVoucher.setEndTime(voucher.getEndTime());
+        SeckillVoucher seckillVoucher = new SeckillVoucher()
+                .setVoucherId(voucher.getId())
+                .setStock(voucher.getStock())
+                .setBeginTime(voucher.getBeginTime())
+                .setEndTime(voucher.getEndTime());
         seckillVoucherService.save(seckillVoucher);
     }
 }
