@@ -1,10 +1,13 @@
 package com.hmdp;
 
 import cn.hutool.core.lang.func.VoidFunc0;
+import com.hmdp.dto.Result;
+import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.Shop;
 import com.hmdp.service.IShopService;
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.utils.RedisIdWorker;
+import com.hmdp.utils.UserHolder;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -89,22 +92,41 @@ class HmDianPingApplicationTests {
     private IVoucherOrderService voucherOrderService;
 
     @Test
-    public void testOrderVoucher() throws InterruptedException {
-        long voucherId = 11L;
+    public void testConcurrentCreateVoucherOrder() throws InterruptedException {
+        int threadCount = 100;
+        ExecutorService executorService = Executors.newFixedThreadPool(20);
+        CountDownLatch latch = new CountDownLatch(threadCount);
 
-        // 模拟200个并发请求
-        int threadCount = 200;
-        CountDownLatch latch = new CountDownLatch((threadCount));
+        Long voucherId = 11L;   // 数据库里真实存在的秒杀券 ID
+        Long userId = 10001L;  // 随便写一个userId模拟同一个用户
 
         for (int i = 0; i < threadCount; i++) {
-            new Thread(() -> {
-                voucherOrderService.seckillVoucher(voucherId);
-            }).start();
+            executorService.submit(() -> {
+                try {
+                    // 模拟登录逻辑，保证ThreadLocal里面有User信息
+                    UserDTO user = new UserDTO();
+                    user.setId(userId);
+                    UserHolder.saveUser(user);
+
+                    Result result = voucherOrderService.seckillVoucher(voucherId);
+                    if (result.getSuccess()) {
+                        System.out.println(Thread.currentThread().getName()
+                                + " SUCCESS, orderId=" + result.getData());
+                    } else {
+                        System.out.println(Thread.currentThread().getName()
+                                + " FAIL, reason=" + result.getErrorMsg());
+                    }
+
+
+                } finally {
+                    // 必须清理ThreadLocal
+                    UserHolder.removeUser();
+                    latch.countDown();
+                }
+            });
         }
 
         latch.await();
-
     }
-
 
 }

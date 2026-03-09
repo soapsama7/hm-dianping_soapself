@@ -11,12 +11,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * <p>
- * 秒杀优惠券表，与优惠券是一对一关系
- * </p>
- *
- * @author 虎哥
- * @since 2022-01-04
+ * 秒杀优惠券类，绑定秒杀优惠券表tb_seckill_voucher
  */
 @Data
 @EqualsAndHashCode(callSuper = false)
