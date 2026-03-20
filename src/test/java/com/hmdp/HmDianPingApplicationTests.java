@@ -1,6 +1,7 @@
 package com.hmdp;
 
-import cn.hutool.core.lang.func.VoidFunc0;
+import org.springframework.data.redis.connection.RedisGeoCommands;
+import org.springframework.data.geo.Point;
 import com.hmdp.dto.Result;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.Shop;
@@ -14,11 +15,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import static com.hmdp.utils.RedisConstants.CACHE_SHOP_KEY;
+import static com.hmdp.utils.RedisConstants.SHOP_GEO_KEY;
 
 @SpringBootTest
 class HmDianPingApplicationTests {
@@ -127,6 +134,72 @@ class HmDianPingApplicationTests {
         }
 
         latch.await();
+    }
+
+    private final ExecutorService executor = Executors.newFixedThreadPool(200);
+
+    @Test
+    public void testSeckill_100() throws InterruptedException {
+        int threadCount = 50;
+        CountDownLatch latch = new CountDownLatch(threadCount);
+        Long voucherId = 18L;
+
+        AtomicInteger successCount = new AtomicInteger();
+        AtomicInteger failCount = new AtomicInteger();
+
+        for (int i = 0; i < threadCount; i++) {
+            final long userId = i + 1; // 每个线程一个不同用户
+            executor.submit(() -> {
+                try {
+                    UserDTO user = new UserDTO();
+                    user.setId(userId);
+                    UserHolder.saveUser(user);
+
+                    Result result = voucherOrderService.seckillVoucher(voucherId);
+
+                    if (result.getSuccess()) {
+                        successCount.incrementAndGet();
+                    } else {
+                        failCount.incrementAndGet();
+                    }
+
+                    System.out.println("用户 " + userId + " 下单结果: " + result);
+                } catch (Throwable e) {
+                    e.printStackTrace();
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+
+        latch.await();
+        Thread.sleep(5000);
+        System.out.println("测试完成，成功：" + successCount.get() + "，失败：" + failCount.get());
+    }
+
+    @Test
+    public void loadShopGeoData(){
+        List<Shop> shopList = shopService.list();
+        // 按照商户的类型Id分组，比如美食类一组、ktv类一组等
+        Map<Long, List<Shop>> map = shopList.stream().collect(Collectors.groupingBy(Shop::getTypeId));
+        // 分组完后分批写入Redis
+        for (Map.Entry<Long, List<Shop>> entry : map.entrySet()){
+            // 按照类型Id分组
+            Long typeId = entry.getKey();
+            String Key = SHOP_GEO_KEY + typeId;
+            List<Shop> shopValue = entry.getValue();
+            // 该list为Geo数据类型list
+            List<RedisGeoCommands.GeoLocation<String>> locations = new ArrayList<>(shopValue.size());
+            // 先写入locations，然后再统一写入Redis提升效率
+            for (Shop shop : shopValue){
+                locations.add(new RedisGeoCommands.GeoLocation<>(
+                        shop.getId().toString(),
+                        new Point(shop.getX(),shop.getY())
+                ));
+            }
+            stringRedisTemplate.opsForGeo().add(Key,locations);
+        }
+
     }
 
 }

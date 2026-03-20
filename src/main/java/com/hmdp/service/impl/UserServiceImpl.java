@@ -12,11 +12,13 @@ import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.RegexUtils;
+import com.hmdp.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -53,6 +55,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
         return Result.ok();
     }
+    
 
     @Override
     public Result login(LoginFormDTO loginForm) {
@@ -88,12 +91,34 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 存储进Redis，并设置有效期
         String tokenKey = LOGIN_USER_KEY+token;
         stringRedisTemplate.opsForHash().putAll(tokenKey,userMap);
-        stringRedisTemplate.expire(tokenKey,CACHE_SHOP_TTL,TimeUnit.MINUTES);
+        stringRedisTemplate.expire(tokenKey,LOGIN_USER_TTL,TimeUnit.MINUTES);
 
         // 还得把token返回给前端
         return Result.ok(token);
 
     }
+
+    @Override
+    public Result logout(HttpServletRequest request) {
+        // 从请求头获取token
+        String token = request.getHeader("authorization");
+        if (token == null || token.isEmpty()) {
+            return Result.fail("请先登录！");
+        }
+        // 移除redis中的token和UserHolder即可
+        String tokenKey = LOGIN_USER_KEY + token;
+        Boolean isSuccess = stringRedisTemplate.delete(tokenKey);
+        // 若未删除成功，则认为还没有登录
+        if (isSuccess){
+            UserHolder.removeUser();
+            return Result.ok("退出登录成功！");
+        }
+            return Result.fail("请先登录！");
+
+
+
+    }
+
 
     public User createUserWithPhone(String phone){
         User user = new User();

@@ -40,7 +40,6 @@ public class RedisIdWorker {
 
         return timestamp << COUNT_BITS | count;
 
-
     }
 
 }
