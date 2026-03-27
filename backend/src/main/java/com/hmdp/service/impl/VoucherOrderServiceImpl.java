@@ -15,6 +15,7 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.aop.framework.AopContext;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.redis.connection.DataType;
 import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -72,9 +73,21 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         seckill_order_executor.shutdown();
     }
 
+
     private class VoucherOrderHandler implements Runnable{
         // 为了学习方便就直接写这里了，实际项目看情况
         private final String queueName = "stream.orders";
+        private final String groupName = "g1";
+        // 判断Redis中是否有相应Stream Key
+        public Boolean testRedisStreamKey() {
+            DataType type = stringRedisTemplate.type(queueName);
+            // 已经是 stream，直接返回
+            if (DataType.STREAM.equals(type)) {
+                return true;
+            }
+            return false;
+        }
+
         @Override
         public void run(){
             while(running && !Thread.currentThread().isInterrupted()){
@@ -85,7 +98,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                         如果获取成功则可以准备下单
                      */
                     List<MapRecord<String, Object, Object>> list = stringRedisTemplate.opsForStream().read(
-                            Consumer.from("g1", "c1"),
+                            Consumer.from(groupName, "c1"),
                             StreamReadOptions.empty().count(1).block(Duration.ofSeconds(2)),
                             StreamOffset.create(queueName, ReadOffset.lastConsumed())
                     );
@@ -103,6 +116,16 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                     // 如果是应用正在关闭，就直接退出
                     if (!running || Thread.currentThread().isInterrupted()) {
                         break;
+                    }
+                    // 如果是因为Stream Key没有被创建，则先创建一下
+                    if (!testRedisStreamKey()){
+                        // 不存在或类型不对：先删（不存在也没关系，不会报错）
+                        stringRedisTemplate.delete(queueName);
+                        // 创建消费组并带上 MKSTREAM 语义（底层会创建空 stream）
+                        stringRedisTemplate.opsForStream()
+                                    .createGroup(queueName, ReadOffset.latest(), groupName);
+                        log.error("Redis中不存在Stream Key，已创建");
+                        continue;
                     }
                     log.error("处理订单异常",e);
                     // 如果处理消息的时候抛了异常，消息也就没有被成功ACK，需要从PEL里面再取出并处理

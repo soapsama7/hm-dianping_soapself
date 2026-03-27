@@ -1,0 +1,47 @@
+services:
+  mysql:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: hmdp
+      TZ: UTC
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/src/main/resources/db/hmdp.sql:/docker-entrypoint-initdb.d/hmdp.sql:ro
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_general_ci"]
+
+  redis:
+    image: redis:6-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/hmdp?useSSL=false&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mysql
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
+  redis_data:

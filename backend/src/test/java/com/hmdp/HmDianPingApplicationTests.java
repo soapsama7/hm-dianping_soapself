@@ -1,5 +1,6 @@
 package com.hmdp;
 
+import org.springframework.data.redis.connection.DataType;
 import org.springframework.data.redis.connection.RedisGeoCommands;
 import org.springframework.data.geo.Point;
 import com.hmdp.dto.Result;
@@ -199,7 +200,25 @@ class HmDianPingApplicationTests {
             }
             stringRedisTemplate.opsForGeo().add(Key,locations);
         }
-
     }
 
+    @Test
+    public void testRedis() {
+        final String queueName = "stream.orders";
+
+        Boolean exists = stringRedisTemplate.hasKey(queueName);
+        if (Boolean.FALSE.equals(exists)) {
+            System.out.println(queueName + "不存在");
+            // key 不存在
+        } else {
+            DataType type = stringRedisTemplate.type(queueName);
+            if (type != DataType.STREAM) {
+                // key 存在，但不是 stream（可能是 string/hash 等）
+                System.out.println(queueName + "存在，但不是");
+            } else {
+                // key 存在且是 stream
+                System.out.println("111");
+            }
+        }
+    }
 }

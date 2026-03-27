@@ -112,7 +112,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
          */
         List<GeoResult<RedisGeoCommands.GeoLocation<String>>> list = results.getContent();
         // 有可能查询出来不为空，但是前端请求的起始页from大于list，导致没有数据返回使得下面的SQL查询出现npt，需要避免
-        if (list.size() < from){
+        if (list.size() < from || list.isEmpty()){
             return Result.ok(Collections.emptyList());
         }
 
